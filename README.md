@@ -2,7 +2,7 @@
 
 <h2 style="background-color:MediumSeaGreen; color:white;">前導：和ChatGPT聊聊天吧</h2>
 
-<div align="center">
+<div style="text-align:left;">
   <h3>1.註冊帳號，點擊Sign Up註冊:
     <a href="https://chat.openai.com/auth/login">ChatGPT 登入頁面</a>
   </h3>
@@ -30,7 +30,7 @@
 
 <h2 style="background-color:MediumSeaGreen; color:white;">試著串接ChatGPT API吧</h2>
 
-<div align="center">
+<div style="text-align:left;">
   <h3>1.註冊一個賬號並獲取API keys：
     <a href="https://platform.openai.com/account/api-keys">OpenAI 登入頁面</a>
   </h3>
@@ -83,7 +83,31 @@
   <p>可以開始使用你熟悉的語言來開發API了</p>
   <p>串接 OpenAI API 的 Kotlin 程式</p>
 
-  <script src="https://gist.github.com/KuanChunChen/4bcd72e0ba21a76eb545112113be7cfa.js"></script>
+
+```Kotlin
+val gptAPI = OkHttpHelper.http(ChatGptConfig.httpChatGptServer).create(ChatGptAPI::class.java)
+          val promptText = messageText?.replace(MessageCommand.ChatGptAsk.command, "")
+          println("promptText:${promptText}")
+          val request = ChatGptCompletionRequest().apply {
+              prompt = promptText
+              model = "text-ada-001"
+          }
+          gptAPI.chatGptCompletion("Bearer ${ChatGptConfig.openAPIKey}", request = request).enqueue(object :
+              Callback<ChatGptCompletionResult> {
+              override fun onResponse(
+                  call: Call<ChatGptCompletionResult>,
+                  response: Response<ChatGptCompletionResult>
+              ) {
+                  println("onResponse")
+
+              }
+
+              override fun onFailure(call: Call<ChatGptCompletionResult>, t: Throwable) {
+                  println("onFailure")
+              }
+
+          })
+```
 
   <p style="text-align:left;">
   &#11014; 這邊我習慣把各種有可能會覆用的code拉出來寫，ChatGptAPI.kt、ChatGptCompletionRequest.kt、ChatGptCompletionResult.kt...等等<br>
@@ -92,12 +116,91 @@
   裡面已經幫忙處理UI Thread跟sub Thread的切換了
   </p>
 
-  <script src="https://gist.github.com/KuanChunChen/04e812ff6d93a27e1ba8a91834b2f140.js"></script>
+```kotlin
+interface ChatGptAPI {
+
+
+    @Headers("Content-Type: application/json")
+    @POST("v1/completions")
+    fun chatGptCompletion(
+        @Header("Authorization") openAPIKey: String,
+        @Body request: ChatGptCompletionRequest
+    ): Call<ChatGptCompletionResult>
+
+}
+
+```
   <p style="text-align:left;">
   &#11014; 這邊主要是用Retrofit把串接接口分離出來
   </p>
 
-  <script src="https://gist.github.com/KuanChunChen/a4b7da41bfe56c408b879fdc8ceac03b.js"></script>
+```kotlin
+object OkHttpHelper {
+
+
+    private var gsonBuilder: GsonBuilder = GsonBuilder()
+
+    const val MAX_CACHE_SIZE = 10
+
+    init {
+        gsonBuilder
+            .setPrettyPrinting()
+            .setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+    }
+
+    @Synchronized
+    fun http(
+        hostName: String = "",
+        connectTimeout: Long = 20,
+        readTimeout: Long = 30,
+        writeTimeout: Long = 30,
+    ): Retrofit {
+
+        synchronized(OkHttpHelper::class.java) {
+
+            val okHttpClient = build(
+                connectTimeout = connectTimeout,
+                readTimeout = readTimeout,
+                writeTimeout = writeTimeout
+            )
+
+            return Retrofit.Builder()
+                .baseUrl(hostName)
+                .client(okHttpClient.build())
+                .addConverterFactory(GsonConverterFactory.create(gsonBuilder.create()))
+                .build()
+        }
+    }
+    @JvmOverloads
+    fun build(
+        showBodyLog: Boolean = true,
+        connectTimeout: Long = 20,
+        readTimeout: Long = 30,
+        writeTimeout: Long = 30,
+    ): OkHttpClient.Builder {
+
+
+        val httpBuilder = OkHttpClient().newBuilder()
+            .readTimeout(readTimeout, TimeUnit.SECONDS)
+            .connectTimeout(connectTimeout, TimeUnit.SECONDS)
+            .writeTimeout(writeTimeout, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .proxy(Proxy.NO_PROXY)
+
+        val loggingInterceptor = HttpLoggingInterceptor()
+
+        if (showBodyLog) {
+            loggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+        } else {
+            loggingInterceptor.level = HttpLoggingInterceptor.Level.HEADERS
+        }
+        httpBuilder.addInterceptor(loggingInterceptor)
+        httpBuilder.connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS))
+        return httpBuilder
+    }
+}
+```
+
   <p style="text-align:left;">
   &#11014; 這邊就是建立一個http連線的類</p>
 
@@ -170,12 +273,46 @@
 <h3>5.至此，你已經取得串接LineBot接口所需的東西了...</h3>
 <p>可以開始使用你熟悉的語言來開發API了</p>
 <p>串接 LineBot API 的 Kotlin 程式</p>
-<script src="https://gist.github.com/KuanChunChen/a21b726e6cde1d2f171ca77b66b78abb.js"></script>
+```kotlin
+class ReplyMessageBody{
+
+   val replyMessageBody = LineReplayRequest(messages = listMessage, replyToken = replyToken)
+      println("----replyMessageBody:${Gson().toJson(replyMessageBody)}----")
+
+      retrofitClient.lineReplayMessage(
+          accessToken = "Bearer ${LineBotConfig.channelAccessToken}",
+          request = replyMessageBody
+      ).enqueue(object :
+          Callback<Any> {
+          override fun onResponse(call: Call<Any>, response: Response<Any>) {
+              println("onResponse")
+          }
+
+          override fun onFailure(call: Call<Any>, t: Throwable) {
+              println("onFailure")
+          }
+
+      })
+
+}
+
+```
 <p style="text-align:left;">
 &#11014; 這裡跟前面ChatGPT串接的過程一樣，也是使用Retrofit來寫
 </p>
 
-<script src="https://gist.github.com/KuanChunChen/371d803d654c0050574da73df02d3f16.js"></script>
+```kotlin
+interface LineAPI {
+
+    @Headers("Content-Type: application/json")
+    @POST("v2/bot/message/reply")
+    fun lineReplayMessage(
+        @Header("Authorization") accessToken: String,
+        @Body request: LineReplayRequest
+    ): Call<Any>
+}
+
+```
 <p style="text-align:left;">
 &#11014; 拉出來的Line Messaging接口
 </p>
@@ -191,3 +328,63 @@
 <div align="center">
   <img src="/images/linebot/line_bot_021.png" width="40%"/><br><br>
 </div><br>
+
+<h2 style="background-color:MediumSeaGreen; color:white;">開發完成後怎麼部署到LineBot內呢？</h2>
+
+<h3>1.前面都開發完成了，那你只需要把你的code開放接口跟部署到Server中提供Webhook URL給Lint Deverloper 後台就能行了</h3>
+
+<p style="text-align:center;">
+這裡就是回到前面去過的<a href="https://developers.line.biz/">Line Deverloper</a><br>
+進到Messaging API這個頁面<br>
+把你開放的接口輸入進來就行了
+</p>
+<div align="center">
+  <img src="/images/linebot/line_bot_022.png" width="100%"/><br><br>
+  <img src="/images/linebot/line_bot_025.png" width="100%"/><br><br>
+</div>
+<p style="text-align:center;">
+&#11014;更新你的url到Line後台</p>
+
+
+<img src="/images/linebot/line_bot_023.png" width="100%"/>
+<p style="text-align:center;">
+&#11014;輸入完後，可以確認你的Server是不是通的</p>
+<img src="/images/linebot/line_bot_024.png" width="100%"/>
+<p style="text-align:center;">
+&#11014;點Verify後的結果顯示，若是錯誤則會反饋error code</p>
+
+<h3>2.這邊我用Kotlin的Ktor來開發自己的後端，像是...</h3>
+<img src="/images/linebot/line_bot_026.png" width="100%"/>
+<p style="text-align:center;">
+&#11014;開一個/line_callback接口</p>
+
+<h3>3.我推薦一個免費用的線上Server：<a href="https://ngrok.com/">ngrok</a></h3>
+
+<p style="text-align:center;">
+因為這個使用門檻低，很適合新手<br>
+只需要照著官網文件<br>
+幾乎無痛就幫你把本地port轉換成一個對外的Url<br>
+相當方便<br></p>
+
+<div align="center">
+  <img src="/images/linebot/line_bot_027.png" width="100%"/><br><br>
+</div>
+<p style="text-align:center;">
+&#11014;登入後，看到ngrok的dashboard，這時只需要照上方步驟<br>
+1.下載zip安裝<br>
+2.在commend line (Linux/mac) / dos(windows) 中複製輸入上方指令<br>
+3.最後選一個port轉成對外port即可
+</p>
+
+<h3 style="text-align:center;">
+4.在用ngrok轉換port後，會看到以下畫面<br></h3>
+<div align="center">
+  <img src="/images/linebot/line_bot_028.png" width="100%"/><br><br>
+  <img src="/images/linebot/line_bot_029.png" width="100%"/><br><br>
+</div>
+
+<h3 style="text-align:center;">
+5.再次回到Line Developer後台，輸入url即可完全串好<br></h3>
+<div align="center">
+  <img src="/images/linebot/line_bot_030.png" width="100%"/><br><br>
+</div>
